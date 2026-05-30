@@ -697,3 +697,37 @@ bo 资源池（32G RAM / 250G disk）
 - 验证：前端 200，后端 /api/utils/env 正常
 - **修复**：sub-store 默认绑 127.0.0.1 → 设 SUB_STORE_FRONTEND_HOST/BACKEND_API_HOST=0.0.0.0 才能被 Service 路由
 - 待办：填充 anytls 节点订阅 + 策略组（可经 UI 或 API，节点先用 hk1/us2/fr1）
+
+### Phase 1 / Step 9（2026-05-31）备份 ✅
+- **etcd 定时快照 → R2**：config.yaml 加 etcd-snapshot-schedule-cron="17 */12 * * *" retention=14 + etcd-s3（R2 bucket k3s-longhorn-backup/etcd-snapshots）
+- 验证：一次性快照 28MiB 已上传 R2（s3-k4s-verify...）；k3s 重启后 8 节点全 Ready
+- 配合：GitOps repo（配置层）+ bo-pre-k3s dump（业务库）+ etcd 快照（集群状态）= 三层可恢复
+
+---
+
+## 11. Phase 1 MVP 完成总结（2026-05-31）
+
+| 能力 | 状态 | 备注 |
+|---|---|---|
+| k3s 8 节点集群 | ✅ | tailscale 内网，flannel MTU 自适应 |
+| 自动证书 | ✅ | cert-manager + CF DNS-01（*.ops/*.edge/*.client） |
+| 入口 | ✅ | Traefik（bo/au/di），SNI passthrough + TLS 终结 |
+| GitOps | ✅ | ArgoCD app-of-apps，只读 deploy key |
+| anytls 代理 | ⚠️ 部分 | bo/au/di 3 节点上线验证；mu/ph/sc 延后（caddy 核心服务，需 hostPort:443） |
+| 监控 | ✅ | VictoriaMetrics(49目标,30d) + VictoriaLogs(7d) + Grafana + Alertmanager→TG |
+| 订阅 | ✅ | sub-store（sub.client.k4s.live），待填充节点 |
+| 备份 | ✅ | etcd→R2 定时；配置在 git |
+
+**遗留/后续（非阻塞）**：
+1. mu/ph/sc anytls（sing-box hostPort:443，不碰 caddy 80/18443）—— 用户指示延后
+2. 监控栈纳入 ArgoCD GitOps + seal TG token（当前 helm 直装 bo）
+3. sub-store 填充 anytls 节点订阅 + 策略组（HK/JP/US/SG + AI/Binance 等）
+4. MagicDNS 启用（用户在 TS 后台点）
+5. 应用 PV 数据（grafana/vmsingle/sub-store）定期备份到 R2
+6. 各节点禁密码登录 + bo/ph 公网 SSH fail2ban（运维走 tailscale）
+
+**关键运维约定**：
+- 运维一律走 tailscale IP（bo=100.120.204.107，公网 SSH 多被 fail2ban）
+- **caddy（mu/ph 的 :80+:18443）绝不能停**——核心 web 服务
+- 境内节点(sh)需配 /etc/rancher/k3s/registries.yaml 国内镜像
+- 本地 push 走 bo SSH SOCKS 隧道(11080)
