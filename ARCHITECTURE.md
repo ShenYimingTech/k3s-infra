@@ -613,3 +613,24 @@ bo 资源池（32G RAM / 250G disk）
 - **bo 公网 IP 22 被 fail2ban**（本轮 SSH 太频繁）→ 运维一律走 bo tailscale IP `100.120.204.107`
 - ingress 当前仅 bo；mu/ph/sc 的 443 被旧 xray 占用，待 Step 6 停旧 xray 后接管；au/di 的 443 空闲但暂未启用 ingress
 - helm 在 bo 上运行（`/etc/rancher/k3s/k3s.yaml`），chart 走 bo 直连
+
+### Phase 1 / Step 5（2026-05-31，进行中）ArgoCD + GitOps
+
+**5.1 ArgoCD 安装**
+- helm `argo/argo-cd` → ns `argocd`，全组件 `global.nodeSelector` 钉 bo(leo-hk)
+- `configs.params.server.insecure=true`（TLS 由 Traefik 终结），dex/notifications 关闭
+- pods 全 Running：application-controller / applicationset / redis / repo-server / server
+- admin 初始密码：`DnUMpvOzQnOGgVqt`（登录后应改，记入密码库）
+
+**5.2 UI 暴露**
+- IngressRoute `argocd`@traefik → svc `argo-cd-argocd-server:80`（跨 ns，allowCrossNamespace）+ tls `ops-wildcard-tls`
+- DNS `argocd.ops.k4s.live` → 45.128.220.149（bo 公网）
+- 验证：di 外部 `https://argocd.ops.k4s.live/healthz` = HTTP 200 + LE 证书 ✓
+
+**5.3 仓库连接（只读 Deploy Key，安全收敛）**
+- bo→github.com:22 可达；在 bo 生成 ed25519 deploy key
+- 公钥加到 repo（`read_only=true`，title=argocd-readonly）；私钥拉取验证成功（HEAD 匹配）
+- ArgoCD repository secret `repo-k3s-infra`@argocd（type=git，SSH 私钥），私钥临时文件已 shred
+- → ArgoCD 拉取走 SSH deploy key（只读），不再用宽权限 classic token
+
+**5.4 app-of-apps 骨架**（进行中）
