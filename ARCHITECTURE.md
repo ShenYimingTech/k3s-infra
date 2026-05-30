@@ -746,5 +746,5 @@ bo 资源池（32G RAM / 250G disk）
 ### 需要用户介入的遗留项（自动执行无法/不应单独完成）
 1. **MagicDNS** — 需 Tailscale admin/API（我只有节点 auth key，无法改 tailnet 设置）。你在 https://login.tailscale.com/admin/dns 点 Enable 即可。非阻塞（全程用 100.x IP）。
 2. **SSH 禁密码登录** — 安全分类器拒绝自动在 8 台生产主机批量执行（锁死风险，含跑核心服务的 caddy 节点）。key 已在全 8 节点验证可用；需你明确授权后再做，或你自行执行。
-3. **监控完全 GitOps 化 + 密钥 seal** — 为避免扰动运行中的告警 + 防止密钥入 git，列为 Phase2：迁 ArgoCD Application(helm source) + grafana/TG 密钥用 SealedSecret + bot_token_file。
+3. ~~监控 GitOps + 密钥 seal~~ ✅ 完成：grafana/TG 密钥已 SealedSecret 加密入 git；grafana 用 existingSecret、alertmanager 用 bot_token_file（验证投递正常）；values 脱敏入 helm-values/；SealedSecret 由 ArgoCD(monitoring-secrets) 同步。helm release 保持 bootstrap 管理（同 cert-manager/Traefik）。
 4. **sub-store 策略组 + 机场订阅** — 需你的机场订阅 URL 和偏好的输出模板（HK/JP/US/SG 分组 + AI/Binance 等 selector）。自建节点已就绪。
