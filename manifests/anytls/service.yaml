@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Service
+metadata: {name: anytls, namespace: proxy}
+spec:
+  selector: {app: anytls}
+  internalTrafficPolicy: Local
+  ports: [{name: anytls, port: 8443, targetPort: 8443}]

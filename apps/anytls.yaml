@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anytls
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:ShenYimingTech/k3s-infra.git
+    targetRevision: main
+    path: manifests/anytls
+  destination: {server: https://kubernetes.default.svc, namespace: proxy}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
