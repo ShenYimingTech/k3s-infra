@@ -1,0 +1,13 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: sub-store-env
+  namespace: proxy
+spec:
+  encryptedData:
+    backend-path: AgBcOLkqxlhadXuSQeSUH8IC1DKJJaNei0cllnM5j7FDevXyYQr2rkRJYfWMZGpl3hfdMBa97/euFrD31p+qYpj0cIA9PAL0sezfGRWj/ykW7E3ssJS/JD+bStlrN9P2ptKjpetupBEUSmEyvQ3yV68NXGegMKcbnHpZfC2s6SV3D68I39ke+8BNlSPoE9vXOYP+jGMA6rS29PvYF6qdV+oG5YB/UyB7gO/zgFTk2RHrh6WI1ba3kWHjNEtThrPxjX2r5vqd7TCOxZpcCvfm0ErmVmwYgd+bRIyKcSyJy1EYd8CAooTkR2yg66cw4HkO6n9m/bUfUtaPPhjLcTBtisa5AgJI6QKcBdqKjxUD9xFP+YnmUaLbsQgM6eHFn2C4wgW4Tl+A1bpJfUZst4M2bQguUAVLMpEU6QVXwy1L+LlIQ5t84ZI+L7lbzkzQprVjpqHemjtcWDzeljNUsyQVBqBU55660ctNpTd95UbPHLJk5hZTQR1JPqZe5ofe4uBkiNViRb5nEnxQaYqTATPzaBerOEzAW2GAZluRHc+dQ/KaCBDbCZS6E2MU9TRW2ORZ3jPe4snIRJz3RL6a1PdN8eugXZaINy11xHx4IPIvnPSjM9bfrOqEK0LxtUOOHHaEQ1zkllWKVV/qCsZwr0yMAGRfyWoAXhc+Hrt1XSU0kcV29pXOvz3UXx0vkuEA7wKoHYoWf9TXFt3ZN1a1hkfr4ROxLJ/JBsZ2hpbf
+  template:
+    metadata:
+      name: sub-store-env
+      namespace: proxy

@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: sub-store, namespace: proxy}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`sub.client.k4s.live`)
+    kind: Rule
+    services: [{name: sub-store, port: 3001}]
+  tls: {secretName: client-wildcard-tls}
