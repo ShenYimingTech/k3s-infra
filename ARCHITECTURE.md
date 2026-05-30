@@ -687,3 +687,5 @@ bo 资源池（32G RAM / 250G disk）
 - alertmanager_notifications_total{telegram}=8 确认投递
 
 **待补**：监控栈 helm 直装 bo（未纳入 ArgoCD，TG token 未 seal）；VictoriaLogs+vector 未部署。
+
+**✅ 日志栈（同 Step 7）**：VictoriaLogs single（7d，10Gi，钉 bo，svc :9428）+ vector DaemonSet 8/8（chart 自带，elasticsearch_bulk sink）。验证：vl_rows_ingested_total=9656+，样本日志可查（含 grafana/各 pod）。sh 经 daocloud mirror 拉到 vector 镜像。
