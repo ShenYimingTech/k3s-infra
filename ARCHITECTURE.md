@@ -567,3 +567,36 @@ bo 资源池（32G RAM / 250G disk）
 - §4.5 “Longhorn 每日全量+增量”为 **Phase2** 备份流；MVP 实际为 bo 本地 PV→R2
 - §3 sh `[standalone anytls]` 矛盾 → 已统一：sh **在 k3s 外**跑独立高端口 anytls（§3 第162行成立）；§5.1.1“sh 不跑 anytls”应理解为“sh 不在 k3s 入口层跑 anytls、不纳入 *.edge 域名”，但有独立中转入口
 - bo 双重身份（control-plane + hk1.edge）：control-plane 组件与 anytls 通过 namespace + NetworkPolicy 隔离
+
+---
+
+## 10. 部署日志
+
+### Phase 1 / Step 1-3（2026-05-30）✅ k3s 集群就绪
+
+- **k3s 版本**：v1.35.5+k3s1（全节点一致）
+- **control-plane**：bo（节点名 `leo-hk`），`--cluster-init` 启用 embedded etcd，禁用内置 traefik/servicelb
+- **8 节点全 Ready**，k8s 通信走 tailscale，节点名/角色/region：
+  | 节点名 | region | role | anytls | storage |
+  |---|---|---|---|---|
+  | leo-hk(bo) | hk | control-plane | ✓ | ✓ |
+  | mu | sg | edge | ✓ | |
+  | ph | us | edge | ✓ | |
+  | au | us | edge | ✓ | |
+  | sc | us | edge | ✓ | |
+  | di | fr | edge | ✓ | |
+  | ot | hk | restricted | | |
+  | sh | cn | relay | | |
+- **网络验证**：flannel over tailscale，`flannel.1` MTU 自动 = 1230（tailscale0 1280 − 50 VXLAN）；跨境 pod-to-pod(bo↔ph) 0 丢包 144ms；1200B 通过 / 1400B 干净失败（无黑洞）；CoreDNS 正常。→ **T3 风险自动解除，无需手动配 MTU**
+- **bo docker 共存验证**：装 k3s 后 10 个生产容器全部健康（postgres/redis/authentik/lobehub/grafana 等），iptables 仅增不删（3966→4062），零扰动
+- **kubeconfig**：mac `~/.kube/k4s-config`，server=`https://100.120.204.107:6443`（走 tailscale），本地 kubectl 正常
+- **sh 特殊处理**：CN 镜像安装（github 在境内限速）；kubelet 加 system-reserved=150Mi + eviction-hard 保护 derper
+- **备份**：装 k3s 前 bo postgres 全库 dump（19MB，4 库）+ authentik 数据 → bo 本地 + mac `~/k3s-backups/` + R2 `bo-pre-k3s/20260530/`（3 副本）
+
+### 待办（Step 4-8）
+- [ ] Step 4：cert-manager(CF DNS-01) + managed Traefik + sealed-secrets
+- [ ] Step 5：ArgoCD + repo 骨架
+- [ ] Step 6：anytls（sing-box Deployment + 新 UUID + *.edge 证书 + Traefik TCPRoute passthrough）+ sh 独立 anytls
+- [ ] Step 7：VictoriaMetrics/Logs/Grafana + vmagent/vector + alertmanager→TG
+- [ ] Step 8：sub-store
+- [ ] MagicDNS 启用（你点）
