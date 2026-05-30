@@ -5,5 +5,8 @@ spec:
   entryPoints: [websecure]
   routes:
   - match: HostSNI(`*.edge.k4s.live`)
-    services: [{name: anytls, port: 8443}]
+    services:
+    - name: anytls
+      port: 8443
+      nativeLB: true   # 走 ClusterIP，配合 Service internalTrafficPolicy:Local 钉本地节点
   tls: {passthrough: true}
