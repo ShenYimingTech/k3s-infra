@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata: {name: pv-backup, namespace: kube-system}
 spec:
-  schedule: "37 4 * * *"   # 每日 04:37
+  schedule: "37 4 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -17,19 +17,20 @@ spec:
           - name: backup
             image: minio/mc:latest
             env:
+            - {name: MC_CONFIG_DIR, value: /tmp/.mc}
+            - {name: HOME, value: /tmp}
             - {name: AK, valueFrom: {secretKeyRef: {name: r2-creds, key: access-key}}}
             - {name: SK, valueFrom: {secretKeyRef: {name: r2-creds, key: secret-key}}}
             command: ["/bin/sh","-c"]
             args:
             - |
-              set -e
               TS=$(date +%Y%m%d-%H%M)
-              mc alias set r2 https://8400a727da59a6bd8e93d2d3f2700c19.r2.cloudflarestorage.com "$AK" "$SK"
-              tar czf /tmp/pv-$TS.tar.gz -C /storage . 2>/dev/null || true
-              mc cp /tmp/pv-$TS.tar.gz r2/k3s-longhorn-backup/pv-backup/pv-$TS.tar.gz
-              # 保留最近 14 份
-              mc ls r2/k3s-longhorn-backup/pv-backup/ | sort | head -n -14 | awk '{print $NF}' | while read f; do mc rm "r2/k3s-longhorn-backup/pv-backup/$f"; done
-              echo "PV backup done: pv-$TS.tar.gz"
+              echo "[1] alias"; mc alias set r2 https://8400a727da59a6bd8e93d2d3f2700c19.r2.cloudflarestorage.com "$AK" "$SK" || exit 1
+              echo "[2] tar"; tar czf /tmp/pv-$TS.tar.gz -C /storage . 2>/dev/null || true
+              echo "[3] size $(du -h /tmp/pv-$TS.tar.gz | cut -f1)"
+              echo "[4] upload"; mc cp /tmp/pv-$TS.tar.gz r2/k3s-longhorn-backup/pv-backup/pv-$TS.tar.gz || exit 1
+              echo "[5] retention"; mc rm --recursive --force --older-than 14d r2/k3s-longhorn-backup/pv-backup/ 2>/dev/null || true
+              echo "[DONE] pv-$TS.tar.gz"
             volumeMounts:
             - {name: storage, mountPath: /storage, readOnly: true}
           volumes:
