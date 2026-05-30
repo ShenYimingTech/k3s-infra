@@ -24,13 +24,10 @@ spec:
             command: ["/bin/sh","-c"]
             args:
             - |
-              TS=$(date +%Y%m%d-%H%M)
-              echo "[1] alias"; mc alias set r2 https://8400a727da59a6bd8e93d2d3f2700c19.r2.cloudflarestorage.com "$AK" "$SK" || exit 1
-              echo "[2] tar"; tar czf /tmp/pv-$TS.tar.gz -C /storage . 2>/dev/null || true
-              echo "[3] size $(du -h /tmp/pv-$TS.tar.gz | cut -f1)"
-              echo "[4] upload"; mc cp /tmp/pv-$TS.tar.gz r2/k3s-longhorn-backup/pv-backup/pv-$TS.tar.gz || exit 1
-              echo "[5] retention"; mc rm --recursive --force --older-than 14d r2/k3s-longhorn-backup/pv-backup/ 2>/dev/null || true
-              echo "[DONE] pv-$TS.tar.gz"
+              mc alias set r2 https://8400a727da59a6bd8e93d2d3f2700c19.r2.cloudflarestorage.com "$AK" "$SK" || exit 1
+              echo "mirror PV storage -> R2..."
+              mc mirror --overwrite --remove --quiet /storage r2/k3s-longhorn-backup/pv-backup/current/ || exit 1
+              echo "DONE $(mc ls --recursive r2/k3s-longhorn-backup/pv-backup/current/ | wc -l) objects mirrored"
             volumeMounts:
             - {name: storage, mountPath: /storage, readOnly: true}
           volumes:
