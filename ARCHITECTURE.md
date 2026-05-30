@@ -638,3 +638,35 @@ bo 资源池（32G RAM / 250G disk）
 - root + namespaces 子应用均 Synced/Healthy；ArgoCD 自动创建 `proxy` + `monitoring` ns
 - 同步策略：automated（prune + selfHeal），后续 Step 6-8 工作负载均经此仓库 GitOps 管理
 - ✅ Step 5 完成：ArgoCD 可用，GitOps 闭环打通
+
+### Phase 1 / Step 6（2026-05-31）anytls —— 部分完成 + 架构纠正
+
+**✅ 已完成：anytls 在 bo/au/di（3 节点）**
+- sing-box v1.13.12，DaemonSet（nodeSelector anytls=true，全 6 节点都跑 pod）
+- `*.edge.k4s.live` 通配证书（cert-manager prod，secret edge-wildcard-tls@proxy）
+- Traefik IngressRouteTCP：`HostSNI(*.edge.k4s.live)` + `tls.passthrough` + `nativeLB:true`
+- Service `anytls`@proxy：ClusterIP + `internalTrafficPolicy: Local`
+- 密码：见 k3s-prep.md（全新生成，未复用旧 vless）
+- **验证**：hk1.edge→bo、us2.edge→au、fr1.edge→di，geo-local 出口全部正确 ✓
+- DNS：hk1/sg1/us1/us2/us3/fr1.edge.k4s.live 已加
+
+**关键修复（nativeLB）**：Traefik 默认对 Service 的 endpoints 直接负载均衡，绕过 kube-proxy 的 `internalTrafficPolicy:Local`，导致连 hk1 却从 au 出口。加 `nativeLB:true` 让 Traefik 走 ClusterIP，由 kube-proxy 钉本地节点 → 修复。
+
+**⚠️ 事故 + 架构纠正：mu/ph/sc 是核心 web 主机，不是纯旧 vless 节点**
+- 原计划把 6 个边缘节点全迁 anytls，假设 mu/ph/sc 的 caddy/xray 只是旧 vless。**此假设错误**：
+  - mu caddy 托管 chat/grafana/newapi 等核心服务（:18443）
+  - ph caddy 托管 **codex.k4s.live / api / free**（:18443，reverse_proxy 127.0.0.1:8080=sub2api）—— **核心服务**
+  - 迁移时误停了 caddy（不只是 xray），导致核心服务短暂中断
+- 已用 Codex 回滚：恢复 mu/ph 的 caddy、sc 的 nginx；摘除 mu/ph/sc 的 `node.k4s/ingress` 标签（Traefik 撤出这 3 节点）
+- 核心服务已恢复：codex.k4s.live:18443 → HTTP 200 ✓
+- **caddy（:80 + :18443）绝不能停**——它是核心 web 入口，不只是 vless 前端
+
+**修正后的边缘架构**：
+| 节点 | anytls | 说明 |
+|---|---|---|
+| bo/au/di | ✅ 已上线 | 不跑 caddy 核心服务，Traefik 占 443 passthrough |
+| mu/ph/sc | ⏳ 待定 | caddy 占 80+18443（核心服务）；443 空闲；anytls 需用 **sing-box hostPort:443 直绑**（不经 Traefik，不碰 caddy 的 80/18443）方式补上 |
+
+**mu/ph/sc anytls 待办方案（不影响 caddy）**：sing-box 在这 3 节点 hostPort:443 直接监听（443 已空），保留 caddy 的 80/18443。当前 sg1/us1/us3.edge DNS 指向这 3 节点但 443 无监听 → 暂不可用，待此方案落地。按用户指示「先解决其他问题」，此项延后。
+
+**当前可用边缘**：hk1(bo)/us2(au)/fr1(di) 3 个；客户端策略组先用这 3 个 Self-Build 节点。
