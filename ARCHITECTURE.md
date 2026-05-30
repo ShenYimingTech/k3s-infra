@@ -634,3 +634,7 @@ bo 资源池（32G RAM / 250G disk）
 - → ArgoCD 拉取走 SSH deploy key（只读），不再用宽权限 classic token
 
 **5.4 app-of-apps 骨架**（进行中）
+- 结构：`bootstrap/root-app.yaml`（apply 一次）→ `apps/*.yaml`（子 Application）→ `manifests/<x>/`（实际清单）
+- root + namespaces 子应用均 Synced/Healthy；ArgoCD 自动创建 `proxy` + `monitoring` ns
+- 同步策略：automated（prune + selfHeal），后续 Step 6-8 工作负载均经此仓库 GitOps 管理
+- ✅ Step 5 完成：ArgoCD 可用，GitOps 闭环打通
