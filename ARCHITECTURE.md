@@ -731,3 +731,7 @@ bo 资源池（32G RAM / 250G disk）
 - **caddy（mu/ph 的 :80+:18443）绝不能停**——核心 web 服务
 - 境内节点(sh)需配 /etc/rancher/k3s/registries.yaml 国内镜像
 - 本地 push 走 bo SSH SOCKS 隧道(11080)
+
+### 补充（2026-05-31）anytls 补齐 6/6 + PV 备份
+- mu/ph/sc 经 anytls-direct DaemonSet（hostPort:443→8443，不碰 caddy 80/18443）上线，6 节点全验证 geo-local 出口
+- PV 备份 CronJob（每日 04:37）：tar /var/lib/rancher/k3s/storage → R2 pv-backup/，留 14 份，R2 凭据 sealed
