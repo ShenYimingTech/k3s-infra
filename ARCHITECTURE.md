@@ -670,3 +670,20 @@ bo 资源池（32G RAM / 250G disk）
 **mu/ph/sc anytls 待办方案（不影响 caddy）**：sing-box 在这 3 节点 hostPort:443 直接监听（443 已空），保留 caddy 的 80/18443。当前 sg1/us1/us3.edge DNS 指向这 3 节点但 443 无监听 → 暂不可用，待此方案落地。按用户指示「先解决其他问题」，此项延后。
 
 **当前可用边缘**：hk1(bo)/us2(au)/fr1(di) 3 个；客户端策略组先用这 3 个 Self-Build 节点。
+
+### Phase 1 / Step 7（2026-05-31）监控栈 —— 指标+告警完成
+
+**✅ VictoriaMetrics k8s-stack（helm，ns monitoring，钉 bo）**
+- chart victoria-metrics-k8s-stack 0.81.0：vmsingle(30d,20Gi) + vmagent + vmalert + vmalertmanager + grafana + kube-state-metrics + node-exporter + operator
+- **49 个抓取目标 up**，metrics 正常流入（vmsingle /health 200）
+- node-exporter DaemonSet 8/8（端口改 **9110** 避开 bo 旧 node_exporter:9100）
+- Grafana：`grafana.ops.k4s.live`（Traefik+ops证书，di 外部 200），admin 密码见 k3s-prep
+- **Alertmanager → Telegram**：验证 8 条成功/0 失败；噪声/误报 blackhole（Watchdog/Kube*Down/RecordingRulesNoData/ScrapePoolHasNoTargets/TooMany*）
+- 禁用 k3s 不适用抓取：kubeControllerManager/Scheduler/Proxy/Etcd
+
+**关键修复**：
+- node-exporter hostPort 9100 撞 bo 旧 node_exporter → 改 9110
+- **sh 拉不到镜像**（docker.io/quay.io 境内墙）→ sh 配 `/etc/rancher/k3s/registries.yaml` daocloud 镜像。经验：境内节点(sh)都需配国内 mirror
+- alertmanager_notifications_total{telegram}=8 确认投递
+
+**待补**：监控栈 helm 直装 bo（未纳入 ArgoCD，TG token 未 seal）；VictoriaLogs+vector 未部署。
