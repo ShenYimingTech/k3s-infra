@@ -689,3 +689,11 @@ bo 资源池（32G RAM / 250G disk）
 **待补**：监控栈 helm 直装 bo（未纳入 ArgoCD，TG token 未 seal）；VictoriaLogs+vector 未部署。
 
 **✅ 日志栈（同 Step 7）**：VictoriaLogs single（7d，10Gi，钉 bo，svc :9428）+ vector DaemonSet 8/8（chart 自带，elasticsearch_bulk sink）。验证：vl_rows_ingested_total=9656+，样本日志可查（含 grafana/各 pod）。sh 经 daocloud mirror 拉到 vector 镜像。
+
+### Phase 1 / Step 8（2026-05-31）sub-store ✅
+- xream/sub-store，Deployment+PVC(1Gi) 钉 bo，ns proxy，GitOps（ArgoCD Synced/Healthy）
+- IngressRoute `sub.client.k4s.live`（client-wildcard 证书）
+- 后端密钥路径见 k3s-prep（SealedSecret 加密入 git）
+- 验证：前端 200，后端 /api/utils/env 正常
+- **修复**：sub-store 默认绑 127.0.0.1 → 设 SUB_STORE_FRONTEND_HOST/BACKEND_API_HOST=0.0.0.0 才能被 Service 路由
+- 待办：填充 anytls 节点订阅 + 策略组（可经 UI 或 API，节点先用 hk1/us2/fr1）
