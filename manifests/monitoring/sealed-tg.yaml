@@ -1,0 +1,13 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: tg-bot-token
+  namespace: monitoring
+spec:
+  encryptedData:
+    token: AgBNvLon1AOETe/6z9A9mmAWBdC9vQVpFNK3EDmlGCvgYS8mDfm8RnUqIFLHZAa/yp0WrQTHs7+3ZmFKq1fZz87jxXrf5g6LwCXnmtsc0KptQqSiPuqpWgWcdRX2dfjQKtKUxQwj2TBl+xif09ZGOLZctuP0ggXDkCoi7GJAeyn+10Cpd7rHGUm4X8g7sVlSLxRIlychGjty8mJ8d68ECW8MxhUrs4+ruiarKjZ+NZYSN0IDP7+SOe5TnGgmNJwCORoDjkcMHY9vgAuUPFBhX+szAeOXsm8BwSpHJ22ICI35SJx9/kYQwwy1dCBscmyzMsFFr2vLWlgfrtEGoyLbOsZrFAaKkASdrHiCtdWyAHzWaY9JocE8CEIItcwNU1TDHZFR0WuemdQ0LALOMT+He6Gu+oD18h9Bt02H7TtXta75zA7f0KZxhHflHErrrUxoXEDD1ffgfaLuDm3htsrj/81SX00fW65fDdXxDXfaIVVqN/lwwHVrXqHVDNn4SeTbwmmko8p/YAKrxREUYTGIxDAjkwfUqqqW9pju8PgfSMHRXPsdPfeFH+LfEFObVYkih4YO8/4/73KRbkIql9NZ7GOrW3wlWtlw2ve43FnN011y4s5pnRXaHiDnraIPLiQA0MG3ga6CDkrBsL2e3LdOXVpLlC65oUqpp6rch5phYJGt5OQeUc/WRkYlmlGxlb3FN0jVYmqiuLXzZUXUa0bdzbqKBLLIpG6VMzqgNCxkm+pZZtBDP99YKL7l89Ty3wrs
+  template:
+    metadata:
+      name: tg-bot-token
+      namespace: monitoring

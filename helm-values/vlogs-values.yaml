@@ -1,0 +1,7 @@
+server:
+  retentionPeriod: "7d"
+  nodeSelector: {kubernetes.io/hostname: leo-hk}
+  persistentVolume: {enabled: true, size: 10Gi}
+vector:
+  enabled: true
+  tolerations: [{operator: Exists}]

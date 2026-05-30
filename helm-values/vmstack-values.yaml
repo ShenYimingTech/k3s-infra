@@ -1,0 +1,67 @@
+victoria-metrics-operator:
+  operator: {nodeSelector: {kubernetes.io/hostname: leo-hk}}
+vmsingle:
+  spec:
+    retentionPeriod: "30d"
+    nodeSelector: {kubernetes.io/hostname: leo-hk}
+    storage: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}
+vmagent:
+  spec: {nodeSelector: {kubernetes.io/hostname: leo-hk}}
+vmalert:
+  spec: {nodeSelector: {kubernetes.io/hostname: leo-hk}}
+alertmanager:
+  spec:
+    nodeSelector: {kubernetes.io/hostname: leo-hk}
+    volumes:
+    - {name: tg, secret: {secretName: tg-bot-token}}
+    volumeMounts:
+    - {name: tg, mountPath: /etc/tg, readOnly: true}
+  config:
+    route:
+      receiver: telegram
+      group_by: [alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+      - receiver: blackhole
+        matchers:
+        - alertname=~"Watchdog|InfoInhibitor|KubeControllerManagerDown|KubeSchedulerDown|KubeProxyDown|RecordingRulesNoData|ScrapePoolHasNoTargets|TooManyScrapeErrors|TooManyLogs"
+    receivers:
+    - name: blackhole
+    - name: telegram
+      telegram_configs:
+      - bot_token_file: /etc/tg/token
+        chat_id: 2140845177
+        parse_mode: HTML
+        send_resolved: true
+        message: '{{ range .Alerts }}<b>{{ .Labels.alertname }}</b> [{{ .Status }}]
+{{ .Annotations.description }}{{ .Annotations.summary }}
+{{ end }}'
+grafana:
+  enabled: true
+  nodeSelector: {kubernetes.io/hostname: leo-hk}
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  ingress: {enabled: false}
+  persistence: {enabled: true, size: 2Gi}
+kube-state-metrics:
+  nodeSelector: {kubernetes.io/hostname: leo-hk}
+prometheus-node-exporter:
+  service: {port: 9110, targetPort: 9110}
+  tolerations: [{operator: Exists}]
+defaultDashboards: {enabled: true}
+
+# k3s 内嵌 controller-manager/scheduler/proxy/etcd，无独立端点 → 关闭抓取与误报
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+kubeEtcd: {enabled: false}
+defaultRules:
+  rules:
+    kubernetesSystemControllerManager: false
+    kubernetesSystemScheduler: false
+    kubeProxy: false
+    etcd: false
