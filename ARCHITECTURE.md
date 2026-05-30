@@ -600,3 +600,16 @@ bo 资源池（32G RAM / 250G disk）
 - [ ] Step 7：VictoriaMetrics/Logs/Grafana + vmagent/vector + alertmanager→TG
 - [ ] Step 8：sub-store
 - [ ] MagicDNS 启用（你点）
+
+### Phase 1 / Step 4（2026-05-31）✅ 核心基建就绪
+
+- **sealed-secrets**：controller 运行于 bo（kube-system，fullname=sealed-secrets-controller）
+- **cert-manager**：钉 bo，ClusterIssuer `letsencrypt-staging` + `letsencrypt-prod`（CF DNS-01，token=cloudflare-api-token@cert-manager）
+- **DNS-01 全链路验证**：staging 签 `*.ops.k4s.live` 通过；prod 通配证书 `ops-wildcard-tls`@traefik 有效期至 2026-08-28
+- **Traefik v3.7.1**：DaemonSet + hostNetwork，仅 `node.k4s/ingress=true` 节点（当前仅 bo）；root+NET_BIND_SERVICE 绑 80/443；metrics 改 **9201**（避开 bo 上 node-exporter:9100 / xray_exporter:9101）
+- **端到端验证**：di(FR) 外部 curl `https://whoami.ops.k4s.live` → 公网DNS→bo:443→Traefik→pod，HTTP 200 + LE 生产证书 ✓（测试资源已清理）
+
+**运维要点（重要）**：
+- **bo 公网 IP 22 被 fail2ban**（本轮 SSH 太频繁）→ 运维一律走 bo tailscale IP `100.120.204.107`
+- ingress 当前仅 bo；mu/ph/sc 的 443 被旧 xray 占用，待 Step 6 停旧 xray 后接管；au/di 的 443 空闲但暂未启用 ingress
+- helm 在 bo 上运行（`/etc/rancher/k3s/k3s.yaml`），chart 走 bo 直连
