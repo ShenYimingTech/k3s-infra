@@ -1,0 +1,22 @@
+# mu/ph/sc：caddy 占 80+18443，443 空闲 → sing-box hostPort:443 直绑（不经 Traefik，不碰 caddy）
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: {name: anytls-direct, namespace: proxy}
+spec:
+  selector: {matchLabels: {app: anytls-direct}}
+  template:
+    metadata: {labels: {app: anytls-direct}}
+    spec:
+      nodeSelector: {node.k4s/anytls-direct: "true"}
+      containers:
+      - name: sing-box
+        image: ghcr.io/sagernet/sing-box:v1.13.12
+        args: ["run", "-c", "/etc/sing-box/config.json"]
+        ports: [{containerPort: 8443, hostPort: 443, name: anytls}]
+        resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+        volumeMounts:
+        - {name: config, mountPath: /etc/sing-box, readOnly: true}
+        - {name: certs, mountPath: /certs, readOnly: true}
+      volumes:
+      - {name: config, secret: {secretName: anytls-config}}
+      - {name: certs, secret: {secretName: edge-wildcard-tls}}
