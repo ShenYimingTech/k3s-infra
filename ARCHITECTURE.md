@@ -735,3 +735,16 @@ bo 资源池（32G RAM / 250G disk）
 ### 补充（2026-05-31）anytls 补齐 6/6 + PV 备份
 - mu/ph/sc 经 anytls-direct DaemonSet（hostPort:443→8443，不碰 caddy 80/18443）上线，6 节点全验证 geo-local 出口
 - PV 备份 CronJob（每日 04:37）：tar /var/lib/rancher/k3s/storage → R2 pv-backup/，留 14 份，R2 凭据 sealed
+
+
+### 最终状态更新（2026-05-31，自动执行收尾）
+- **anytls 6/6 ✅**：mu/ph/sc 经 anytls-direct(hostPort:443) 补齐，全节点 geo-local 验证；caddy 核心服务未受影响
+- **PV 备份 ✅**：CronJob 每日 mc mirror /var/lib/rancher/k3s/storage → R2 pv-backup/current（55MiB/800 对象，已验证）
+- **sub-store ✅**：self-build 订阅含 6 自建 anytls 节点
+- **监控**：保持 bootstrap-helm 管理（同 cert-manager/Traefik），values 在 bo 不入 git（含 grafana/TG 密钥，避免泄露）
+
+### 需要用户介入的遗留项（自动执行无法/不应单独完成）
+1. **MagicDNS** — 需 Tailscale admin/API（我只有节点 auth key，无法改 tailnet 设置）。你在 https://login.tailscale.com/admin/dns 点 Enable 即可。非阻塞（全程用 100.x IP）。
+2. **SSH 禁密码登录** — 安全分类器拒绝自动在 8 台生产主机批量执行（锁死风险，含跑核心服务的 caddy 节点）。key 已在全 8 节点验证可用；需你明确授权后再做，或你自行执行。
+3. **监控完全 GitOps 化 + 密钥 seal** — 为避免扰动运行中的告警 + 防止密钥入 git，列为 Phase2：迁 ArgoCD Application(helm source) + grafana/TG 密钥用 SealedSecret + bot_token_file。
+4. **sub-store 策略组 + 机场订阅** — 需你的机场订阅 URL 和偏好的输出模板（HK/JP/US/SG 分组 + AI/Binance 等 selector）。自建节点已就绪。
