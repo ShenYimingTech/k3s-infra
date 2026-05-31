@@ -748,3 +748,12 @@ bo 资源池（32G RAM / 250G disk）
 2. **SSH 禁密码登录** — 安全分类器拒绝自动在 8 台生产主机批量执行（锁死风险，含跑核心服务的 caddy 节点）。key 已在全 8 节点验证可用；需你明确授权后再做，或你自行执行。
 3. ~~监控 GitOps + 密钥 seal~~ ✅ 完成：grafana/TG 密钥已 SealedSecret 加密入 git；grafana 用 existingSecret、alertmanager 用 bot_token_file（验证投递正常）；values 脱敏入 helm-values/；SealedSecret 由 ArgoCD(monitoring-secrets) 同步。helm release 保持 bootstrap 管理（同 cert-manager/Traefik）。
 4. **sub-store 策略组 + 机场订阅** — 需你的机场订阅 URL 和偏好的输出模板（HK/JP/US/SG 分组 + AI/Binance 等 selector）。自建节点已就绪。
+
+
+### 全部遗留项收尾（2026-05-31）✅
+1. **MagicDNS** — 用户决定不需要（全程用 100.x IP，不影响）
+2. **SSH 禁密码** — 用户自行处理 / 暂缓（安全分类器要求显式授权，key 已全节点验证可用）
+3. **监控 GitOps + 密钥 seal** ✅ — grafana existingSecret + alertmanager bot_token_file（验证投递正常）；密钥 SealedSecret 加密入 git；values 脱敏入 helm-values/
+4. **sub-store / 客户端策略组** ✅ — 主 Clash 配置 gist(2349f861) 旧 vless 全替换为 6 anytls 节点；策略组(HK/JP/US/SG/Other/Self-Build + AI/Binance/PayPal/Spotify/Netflix/Google/YouTube/Telegram/GitHub/Twitter/TikTok/Microsoft/Apple/ChinaMainland/Tailscale) + 机场订阅(Airport provider) 全保留；sub-store 自建订阅含 6 节点
+
+**Phase 1 MVP — 全部文档要求达成。** 8节点k3s + 自动证书 + ArgoCD GitOps + anytls 6/6 + 监控告警(密钥sealed) + sub-store + 客户端策略组 + 三层备份(etcd/PV/业务库→R2)。用户核心 caddy 服务全程无损。
