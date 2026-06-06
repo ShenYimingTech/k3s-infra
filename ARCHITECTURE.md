@@ -757,3 +757,35 @@ bo 资源池（32G RAM / 250G disk）
 4. **sub-store / 客户端策略组** ✅ — 主 Clash 配置 gist(2349f861) 旧 vless 全替换为 6 anytls 节点；策略组(HK/JP/US/SG/Other/Self-Build + AI/Binance/PayPal/Spotify/Netflix/Google/YouTube/Telegram/GitHub/Twitter/TikTok/Microsoft/Apple/ChinaMainland/Tailscale) + 机场订阅(Airport provider) 全保留；sub-store 自建订阅含 6 节点
 
 **Phase 1 MVP — 全部文档要求达成。** 8节点k3s + 自动证书 + ArgoCD GitOps + anytls 6/6 + 监控告警(密钥sealed) + sub-store + 客户端策略组 + 三层备份(etcd/PV/业务库→R2)。用户核心 caddy 服务全程无损。
+
+---
+
+## 12. Docker 镜像加速（2026-06-06）✅
+
+**需求**：加速拉公共镜像（境内 sh 慢/被墙），公网域名+证书，全套上游。
+
+**方案**：5 个 `registry:2` pull-through 缓存（钉 bo），Traefik + cert-manager 通配证书 `*.mirror.k4s.live` 暴露，GitOps（apps/registry）。
+| 子域 | 上游 |
+|---|---|
+| dockerhub.mirror.k4s.live | docker.io (registry-1.docker.io) |
+| quay.mirror.k4s.live | quay.io |
+| ghcr.mirror.k4s.live | ghcr.io |
+| k8s.mirror.k4s.live | registry.k8s.io |
+| gcr.mirror.k4s.live | gcr.io |
+
+- 缓存 PVC 各 15Gi（local-path@bo）；证书 `mirror-wildcard-tls`@registry
+- **验证**：5 端点 /v2/ 全 200；alpine/sing-box manifest pull-through 200，registry 日志确认回源上游并缓存
+
+**消费端配置**：
+- k3s 节点 `/etc/rancher/k3s/registries.yaml`（sh 已配，自建 mirror 优先 + daocloud fallback）：
+  ```yaml
+  mirrors:
+    docker.io: {endpoint: ["https://dockerhub.mirror.k4s.live","https://docker.m.daocloud.io"]}
+    quay.io: {endpoint: ["https://quay.mirror.k4s.live"]}
+    ghcr.io: {endpoint: ["https://ghcr.mirror.k4s.live"]}
+    registry.k8s.io: {endpoint: ["https://k8s.mirror.k4s.live"]}
+    gcr.io: {endpoint: ["https://gcr.mirror.k4s.live"]}
+  ```
+- dev 机 docker `/etc/docker/daemon.json`（仅 docker.io）：`{"registry-mirrors":["https://dockerhub.mirror.k4s.live"]}`
+
+**已知问题**：配 sh 时重启 k3s-agent，暴露 **sh↔bo 跨境 tailscale 当前丢包(30-50%)**，k3s-agent 连接反复断（node 仍 Ready 但 systemd activating）。链路好转自愈；sh 的 derper/rustdesk(docker) 不受影响。注意：Docker Hub 匿名 pull-through 有速率限制(100/6h/IP)，量大可给 dockerhub 实例加 Hub 账号。
