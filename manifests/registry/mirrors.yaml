@@ -1,0 +1,246 @@
+# Docker 镜像加速：5 个 registry:2 pull-through 缓存（钉 bo），Traefik+证书暴露 *.mirror.k4s.live
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache-dockerhub, namespace: registry}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 15Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mirror-dockerhub, namespace: registry, labels: {upstream: "docker.io"}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mirror-dockerhub}}
+  strategy: {type: Recreate}
+  template:
+    metadata: {labels: {app: mirror-dockerhub}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_PROXY_REMOTEURL, value: "https://registry-1.docker.io"}
+        - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry}
+        - {name: REGISTRY_HTTP_ADDR, value: ":5000"}
+        ports: [{containerPort: 5000}]
+        volumeMounts: [{name: cache, mountPath: /var/lib/registry}]
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - {name: cache, persistentVolumeClaim: {claimName: cache-dockerhub}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mirror-dockerhub, namespace: registry}
+spec:
+  selector: {app: mirror-dockerhub}
+  ports: [{port: 5000, targetPort: 5000}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: mirror-dockerhub, namespace: registry}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`dockerhub.mirror.k4s.live`)
+    kind: Rule
+    services: [{name: mirror-dockerhub, port: 5000}]
+  tls: {secretName: mirror-wildcard-tls}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache-quay, namespace: registry}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 15Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mirror-quay, namespace: registry, labels: {upstream: "quay.io"}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mirror-quay}}
+  strategy: {type: Recreate}
+  template:
+    metadata: {labels: {app: mirror-quay}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_PROXY_REMOTEURL, value: "https://quay.io"}
+        - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry}
+        - {name: REGISTRY_HTTP_ADDR, value: ":5000"}
+        ports: [{containerPort: 5000}]
+        volumeMounts: [{name: cache, mountPath: /var/lib/registry}]
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - {name: cache, persistentVolumeClaim: {claimName: cache-quay}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mirror-quay, namespace: registry}
+spec:
+  selector: {app: mirror-quay}
+  ports: [{port: 5000, targetPort: 5000}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: mirror-quay, namespace: registry}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`quay.mirror.k4s.live`)
+    kind: Rule
+    services: [{name: mirror-quay, port: 5000}]
+  tls: {secretName: mirror-wildcard-tls}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache-ghcr, namespace: registry}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 15Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mirror-ghcr, namespace: registry, labels: {upstream: "ghcr.io"}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mirror-ghcr}}
+  strategy: {type: Recreate}
+  template:
+    metadata: {labels: {app: mirror-ghcr}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_PROXY_REMOTEURL, value: "https://ghcr.io"}
+        - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry}
+        - {name: REGISTRY_HTTP_ADDR, value: ":5000"}
+        ports: [{containerPort: 5000}]
+        volumeMounts: [{name: cache, mountPath: /var/lib/registry}]
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - {name: cache, persistentVolumeClaim: {claimName: cache-ghcr}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mirror-ghcr, namespace: registry}
+spec:
+  selector: {app: mirror-ghcr}
+  ports: [{port: 5000, targetPort: 5000}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: mirror-ghcr, namespace: registry}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`ghcr.mirror.k4s.live`)
+    kind: Rule
+    services: [{name: mirror-ghcr, port: 5000}]
+  tls: {secretName: mirror-wildcard-tls}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache-k8s, namespace: registry}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 15Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mirror-k8s, namespace: registry, labels: {upstream: "registry.k8s.io"}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mirror-k8s}}
+  strategy: {type: Recreate}
+  template:
+    metadata: {labels: {app: mirror-k8s}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_PROXY_REMOTEURL, value: "https://registry.k8s.io"}
+        - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry}
+        - {name: REGISTRY_HTTP_ADDR, value: ":5000"}
+        ports: [{containerPort: 5000}]
+        volumeMounts: [{name: cache, mountPath: /var/lib/registry}]
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - {name: cache, persistentVolumeClaim: {claimName: cache-k8s}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mirror-k8s, namespace: registry}
+spec:
+  selector: {app: mirror-k8s}
+  ports: [{port: 5000, targetPort: 5000}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: mirror-k8s, namespace: registry}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`k8s.mirror.k4s.live`)
+    kind: Rule
+    services: [{name: mirror-k8s, port: 5000}]
+  tls: {secretName: mirror-wildcard-tls}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache-gcr, namespace: registry}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 15Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mirror-gcr, namespace: registry, labels: {upstream: "gcr.io"}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mirror-gcr}}
+  strategy: {type: Recreate}
+  template:
+    metadata: {labels: {app: mirror-gcr}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: registry
+        image: registry:2
+        env:
+        - {name: REGISTRY_PROXY_REMOTEURL, value: "https://gcr.io"}
+        - {name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY, value: /var/lib/registry}
+        - {name: REGISTRY_HTTP_ADDR, value: ":5000"}
+        ports: [{containerPort: 5000}]
+        volumeMounts: [{name: cache, mountPath: /var/lib/registry}]
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - {name: cache, persistentVolumeClaim: {claimName: cache-gcr}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mirror-gcr, namespace: registry}
+spec:
+  selector: {app: mirror-gcr}
+  ports: [{port: 5000, targetPort: 5000}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: mirror-gcr, namespace: registry}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`gcr.mirror.k4s.live`)
+    kind: Rule
+    services: [{name: mirror-gcr, port: 5000}]
+  tls: {secretName: mirror-wildcard-tls}

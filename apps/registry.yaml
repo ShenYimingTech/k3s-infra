@@ -1,0 +1,10 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: registry, namespace: argocd, finalizers: [resources-finalizer.argocd.argoproj.io]}
+spec:
+  project: default
+  source: {repoURL: git@github.com:ShenYimingTech/k3s-infra.git, targetRevision: main, path: manifests/registry}
+  destination: {server: https://kubernetes.default.svc, namespace: registry}
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]

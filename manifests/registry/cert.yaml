@@ -1,0 +1,7 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: mirror-wildcard, namespace: registry}
+spec:
+  secretName: mirror-wildcard-tls
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  dnsNames: ["*.mirror.k4s.live", "mirror.k4s.live"]
