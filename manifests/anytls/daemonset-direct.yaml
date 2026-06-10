@@ -4,6 +4,10 @@ kind: DaemonSet
 metadata: {name: anytls-direct, namespace: proxy}
 spec:
   selector: {matchLabels: {app: anytls-direct}}
+  # edge 节点彼此独立，且 mu 跨境常 NotReady；放开 maxUnavailable 避免一台掉线卡住整批 rollout
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: "100%"}
   template:
     metadata: {labels: {app: anytls-direct}}
     spec:
