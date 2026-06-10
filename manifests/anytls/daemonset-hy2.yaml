@@ -1,0 +1,35 @@
+# Hysteria2 (UDP/QUIC) 必须 hostNetwork：k3s flannel CNI 下 QUIC 走 pod 网络无法完成握手
+# （TCP 的 anytls/trojan 走 hostPort 正常，仅 UDP/QUIC 受影响）。hostNetwork 直接绑宿主 :8445。
+# 跑在所有 anytls 节点（main 与 direct 两类 label 取并集）。
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: {name: anytls-hy2, namespace: proxy}
+spec:
+  selector: {matchLabels: {app: anytls-hy2}}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: "100%"}
+  template:
+    metadata: {labels: {app: anytls-hy2}}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions: [{key: node.k4s/anytls, operator: Exists}]
+            - matchExpressions: [{key: node.k4s/anytls-direct, operator: Exists}]
+      containers:
+      - name: sing-box
+        image: ghcr.io/sagernet/sing-box:v1.13.12
+        args: ["run", "-c", "/etc/sing-box/config.json"]
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {memory: 256Mi}
+        volumeMounts:
+        - {name: config, mountPath: /etc/sing-box, readOnly: true}
+        - {name: certs, mountPath: /certs, readOnly: true}
+      volumes:
+      - {name: config, secret: {secretName: hy2-config}}
+      - {name: certs, secret: {secretName: edge-wildcard-tls}}

@@ -19,7 +19,6 @@ spec:
         ports:
         - {containerPort: 8443, hostPort: 443, name: anytls}
         - {containerPort: 8444, hostPort: 8444, protocol: TCP, name: trojan}
-        - {containerPort: 8445, hostPort: 8445, protocol: UDP, name: hy2}
         resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 256Mi}}
         volumeMounts:
         - {name: config, mountPath: /etc/sing-box, readOnly: true}
