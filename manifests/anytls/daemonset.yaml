@@ -11,10 +11,13 @@ spec:
       - name: sing-box
         image: ghcr.io/sagernet/sing-box:v1.13.12
         args: ["run", "-c", "/etc/sing-box/config.json"]
-        ports: [{containerPort: 8443, name: anytls}]
+        ports:
+        - {containerPort: 8443, name: anytls}
+        - {containerPort: 8444, hostPort: 8444, protocol: TCP, name: trojan}
+        - {containerPort: 8445, hostPort: 8445, protocol: UDP, name: hy2}
         resources:
           requests: {cpu: 20m, memory: 32Mi}
-          limits: {memory: 128Mi}
+          limits: {memory: 256Mi}
         volumeMounts:
         - {name: config, mountPath: /etc/sing-box, readOnly: true}
         - {name: certs, mountPath: /certs, readOnly: true}
