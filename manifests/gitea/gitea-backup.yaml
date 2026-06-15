@@ -1,0 +1,43 @@
+# 每日 gitea dump -> Cloudflare R2(异地逻辑备份,保留近 7 份)。
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: gitea-backup, namespace: gitea}
+spec:
+  schedule: "23 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          nodeSelector: {kubernetes.io/hostname: leo-hk}
+          containers:
+          - name: backup
+            image: gitea/gitea:1.22.6
+            env:
+            - {name: AK, valueFrom: {secretKeyRef: {name: r2-creds, key: access-key}}}
+            - {name: SK, valueFrom: {secretKeyRef: {name: r2-creds, key: secret-key}}}
+            command: ["/bin/sh","-c"]
+            args:
+            - |
+              set -e
+              TS=$(date +%Y%m%d-%H%M%S)
+              mkdir -p /data/_backup_tmp && chown 1000:1000 /data/_backup_tmp
+              echo "dumping..."
+              su git -c "GITEA_WORK_DIR=/data/gitea gitea dump -c /data/gitea/conf/app.ini --type tar.gz --tempdir /data/_backup_tmp --file /data/_backup_tmp/gitea-$TS.tar.gz --quiet" || exit 1
+              echo "fetching mc..."
+              wget -qO /tmp/mc https://dl.min.io/client/mc/release/linux-amd64/mc && chmod +x /tmp/mc
+              export MC_CONFIG_DIR=/tmp/.mc HOME=/tmp
+              /tmp/mc alias set r2 https://8400a727da59a6bd8e93d2d3f2700c19.r2.cloudflarestorage.com "$AK" "$SK" || exit 1
+              /tmp/mc cp /data/_backup_tmp/gitea-$TS.tar.gz r2/k3s-longhorn-backup/gitea/ || exit 1
+              rm -f /data/_backup_tmp/gitea-$TS.tar.gz
+              echo "prune (keep 7)..."
+              /tmp/mc ls r2/k3s-longhorn-backup/gitea/ | awk '{print $NF}' | sort | head -n -7 | while read f; do [ -n "$f" ] && /tmp/mc rm "r2/k3s-longhorn-backup/gitea/$f"; done
+              echo "DONE: $(/tmp/mc ls r2/k3s-longhorn-backup/gitea/ | wc -l) backups in R2"
+            volumeMounts: [{name: data, mountPath: /data}]
+          volumes:
+          - name: data
+            persistentVolumeClaim: {claimName: gitea-data}
