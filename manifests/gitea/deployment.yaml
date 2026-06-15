@@ -38,7 +38,7 @@ spec:
         - {name: GITEA__oauth2__JWT_SECRET,       valueFrom: {secretKeyRef: {name: gitea-secrets, key: jwt-secret}}}
         ports: [{containerPort: 3000, name: http}]
         volumeMounts: [{name: data, mountPath: /data}]
-        resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 512Mi}}
+        resources: {requests: {cpu: 50m, memory: 256Mi}, limits: {memory: 2Gi}}   # 2Gi:大仓(usbFilter_Cpp 450M)clone 时 git pack 吃内存,512Mi 会 OOM
       volumes:
       - name: data
         persistentVolumeClaim: {claimName: gitea-data}
