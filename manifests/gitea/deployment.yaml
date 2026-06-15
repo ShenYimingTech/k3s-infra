@@ -1,0 +1,44 @@
+# Gitea 公网主站(git.k4s.live)。sqlite,PV 钉 bo;仅 HTTPS 克隆(DISABLE_SSH)。
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: gitea-data, namespace: gitea}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 10Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: gitea, namespace: gitea}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}          # RWO local-path:重建而非滚动,避免双挂
+  selector: {matchLabels: {app: gitea}}
+  template:
+    metadata: {labels: {app: gitea}}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: leo-hk}
+      containers:
+      - name: gitea
+        image: gitea/gitea:1.22.6
+        env:
+        - {name: USER_UID, value: "1000"}
+        - {name: USER_GID, value: "1000"}
+        - {name: GITEA__server__ROOT_URL, value: "https://git.k4s.live/"}
+        - {name: GITEA__server__DOMAIN, value: "git.k4s.live"}
+        - {name: GITEA__server__HTTP_PORT, value: "3000"}
+        - {name: GITEA__server__DISABLE_SSH, value: "true"}
+        - {name: GITEA__server__LFS_START_SERVER, value: "true"}
+        - {name: GITEA__database__DB_TYPE, value: "sqlite3"}
+        - {name: GITEA__database__PATH, value: "/data/gitea/gitea.db"}
+        - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
+        - {name: GITEA__security__INSTALL_LOCK, value: "true"}
+        - {name: GITEA__security__SECRET_KEY,    valueFrom: {secretKeyRef: {name: gitea-secrets, key: secret-key}}}
+        - {name: GITEA__security__INTERNAL_TOKEN, valueFrom: {secretKeyRef: {name: gitea-secrets, key: internal-token}}}
+        - {name: GITEA__oauth2__JWT_SECRET,       valueFrom: {secretKeyRef: {name: gitea-secrets, key: jwt-secret}}}
+        ports: [{containerPort: 3000, name: http}]
+        volumeMounts: [{name: data, mountPath: /data}]
+        resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 512Mi}}
+      volumes:
+      - name: data
+        persistentVolumeClaim: {claimName: gitea-data}

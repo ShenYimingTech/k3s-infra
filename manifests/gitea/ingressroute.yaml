@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: gitea, namespace: gitea}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`git.k4s.live`)
+    kind: Rule
+    services: [{name: gitea, port: 3000}]
+  tls: {secretName: git-tls}
