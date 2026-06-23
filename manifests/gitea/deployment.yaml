@@ -32,6 +32,7 @@ spec:
         - {name: GITEA__database__DB_TYPE, value: "sqlite3"}
         - {name: GITEA__database__PATH, value: "/data/gitea/gitea.db"}
         - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
+        - {name: GITEA__service__REQUIRE_SIGNIN_VIEW, value: "true"}
         - {name: GITEA__security__INSTALL_LOCK, value: "true"}
         - {name: GITEA__security__SECRET_KEY,    valueFrom: {secretKeyRef: {name: gitea-secrets, key: secret-key}}}
         - {name: GITEA__security__INTERNAL_TOKEN, valueFrom: {secretKeyRef: {name: gitea-secrets, key: internal-token}}}
