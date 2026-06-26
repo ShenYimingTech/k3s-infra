@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: lee, namespace: lee}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: lee}}
+  template:
+    metadata: {labels: {app: lee}}
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports: [{containerPort: 80}]
+        resources: {requests: {cpu: 5m, memory: 16Mi}, limits: {memory: 64Mi}}
+        volumeMounts:
+        - {name: html, mountPath: /usr/share/nginx/html/index.html, subPath: index.html}
+        - {name: html, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf}
+      volumes:
+      - name: html
+        configMap: {name: lee-html}

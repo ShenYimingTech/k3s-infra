@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: lee, namespace: lee}
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: Host(`lee.k4s.live`)
+    kind: Rule
+    services: [{name: lee, port: 80}]
+  tls: {secretName: lee-tls}

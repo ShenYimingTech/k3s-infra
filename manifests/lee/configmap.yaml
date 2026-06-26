@@ -1,0 +1,634 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: lee-html, namespace: lee}
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+      location / { try_files $uri $uri/ /index.html; }
+      gzip on;
+      gzip_types text/html text/css application/javascript;
+    }
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雨夜 · 恋人</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        cursor: pointer;
+        font-family: "Kaiti SC", "STKaiti", "KaiTi", "FangSong", cursive;
+        user-select: none;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #stage {
+        position: relative;
+        width: min(100vw, 66.6667vh);   /* 宽:高 = 2:3 的竖向画面 */
+        aspect-ratio: 2 / 3;
+        background: #000;
+        overflow: hidden;
+      }
+      #rain {
+        position: absolute;
+        inset: 0;
+        display: block;
+      }
+      #lyric {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        writing-mode: vertical-lr;          /* 竖排：从上到下，列从左到右 */
+        color: rgba(235, 240, 255, 0.92);
+        font-size: clamp(18px, min(7.2vw, 4.8vh), 43px); /* 双轴约束：12字列高 ≤ 70%舞台高 */
+        letter-spacing: 0.22em;
+        text-shadow: 0 0 18px rgba(120, 160, 255, 0.35),
+                     0 2px 6px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+        max-height: 70%;   /* 相对于舞台高度，上下各留约15%空白 */
+        max-width: 82%;    /* 相对于舞台宽度，左右各留约9%空白 */
+        line-height: 2;
+      }
+      #lyric .line {                         /* 每一句是一列 */
+        display: block;
+        white-space: nowrap;                 /* 一句保持一整列，不中途换列 */
+        margin-right: 0.32em;                /* 列与列之间的间距 */
+        opacity: 0;
+        transition: opacity 1.1s ease;
+      }
+      #lyric .line:last-child { margin-right: 0; }
+      #lyric .line.show { opacity: 1; }
+      #hint {
+        position: absolute;
+        left: 50%;
+        bottom: 28px;
+        transform: translateX(-50%);
+        color: rgba(200, 210, 235, 0.35);
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        pointer-events: none;
+        transition: opacity 1s ease;
+      }
+    </style>
+    </head>
+    <body>
+      <div id="stage">
+        <canvas id="rain"></canvas>
+        <div id="lyric"></div>
+        <div id="hint">鼠标左键单击 / 按 ↓ 键 切换下一句</div>
+      </div>
+
+    <script>
+    /* ====== 歌词分页：每个数组是一页，每页句数可不同 ====== */
+    const pages = [
+      ["爱像是一场小雨", "淅沥沥淅沥沥", "滴入我回忆"],
+      ["爱又像一场旅行", "走停停走停停", "忽然遇见你", "停下了足迹"],
+      ["是否还是不太喜欢吃香菜", "到现在都没改"],
+      ["那双原来最喜欢的匡威鞋带", "现在却解不开"],
+      ["那张磁带一再一再", "它又再一次的卡带"],
+      ["却还会再一遍一遍", "一遍又一遍听下来"],
+      ["昨天的爱yi ai yi ai", "已回不来"],
+      ["却依然在心里徘徊", "却依然在心底徘徊"],
+      ["爱又像一场旅行", "走停停走停停", "忽然遇见你", "停下了足迹"],
+      ["是否还是不太喜欢吃香菜", "到现在都没改"],
+      ["那双原来最喜欢的匡威鞋带", "现在却解不开"],
+      ["那张磁带一再一再", "它又再一次的卡带"],
+      ["却还会再一遍一遍", "一遍又一遍听下来"],
+      ["昨天的爱yi ai yi ai","已回不来"],
+      ["却依然在心里徘徊", "却依然在心底徘徊"],
+      ["凶手和恋人都喜欢事后回现场", "看一看自己从前到底有多疯狂"],
+      ["回忆里充满着罗曼蒂克的幻想", "那张磁带里藏着过往", "播放了就会回到现场"],
+      ["再一再它又再一次的卡带"],
+      ["却还会再一遍一遍", "一遍又一遍听下来"],
+      ["昨天的爱 已回不来"],
+      ["却依然在心里徘徊", "却依然在心底徘徊"],
+      ["爱像是一场", "小雨"]
+    ];
+    /* ======================================================== */
+
+    const lyricEl = document.getElementById('lyric');
+    const hintEl  = document.getElementById('hint');
+
+    let pageIndex = -1;     // 当前是第几页
+    let revealCount = 0;    // 当前页已显示出来的句数
+    let lineEls = [];       // 当前页的句子元素
+    let switching = false;
+    let finalEffectActive = false;
+    let finalEffectCanvas = null;
+    let doSkipTitle = function() { return false; };
+
+    // 构建某一页（每个字拆成独立 span，便于逐字随机淡出）
+    function buildPage(i) {
+      lyricEl.innerHTML = '';
+      lineEls = [];
+      pages[i].forEach(text => {
+        const d = document.createElement('div');
+        d.className = 'line';
+        [...text].forEach(ch => {
+          const s = document.createElement('span');
+          s.textContent = ch;
+          d.appendChild(s);
+        });
+        lyricEl.appendChild(d);
+        lineEls.push(d);
+      });
+    }
+
+    function revealNextLine() {
+      lineEls[revealCount].classList.add('show');
+      revealCount++;
+      if (pageIndex === pages.length - 1 && revealCount === lineEls.length) {
+        setTimeout(startFinalEffect, 1100);
+      }
+    }
+
+    function startFinalEffect() {
+      if (finalEffectActive) return;
+      finalEffectActive = true;
+
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;';
+      overlayCanvas.width  = W;
+      overlayCanvas.height = H;
+      overlayCanvas.style.width  = stage.clientWidth  + 'px';
+      overlayCanvas.style.height = stage.clientHeight + 'px';
+      stage.appendChild(overlayCanvas);
+      finalEffectCanvas = overlayCanvas;
+      const oCtx = overlayCanvas.getContext('2d');
+
+      const DURATION = 10000;
+      let startTs = null;
+      const textRipples = [];
+
+      function tick(ts) {
+        if (!finalEffectActive) { overlayCanvas.remove(); finalEffectCanvas = null; return; }
+        if (!startTs) startTs = ts;
+        const elapsed = ts - startTs;
+        const t     = Math.min(1, elapsed / DURATION);
+        const eased = t * t;
+        finalEffectProgress = t;
+
+        // 文字随时间淡出消失（opacity 1→0），叠加轻微模糊增加消融感
+        const textFade = Math.max(0, 1 - t);
+        lyricEl.style.opacity = textFade.toFixed(4);
+        lyricEl.style.filter  = `blur(${eased * 4}px)`;
+
+        const rect      = lyricEl.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+        const sx = W / stage.clientWidth;
+        const sy = H / stage.clientHeight;
+        const lx = (rect.left - stageRect.left) * sx;
+        const ly = (rect.top  - stageRect.top)  * sy;
+        const lw = rect.width  * sx;
+        const lh = rect.height * sy;
+
+        // 涟漪随文字淡出同步减少，前半段达到峰值后逐渐消散
+        if (Math.random() < (0.10 + 0.28 * eased) * Math.max(0.10, textFade)) {
+          textRipples.push({
+            x:     lx + Math.random() * lw,
+            y:     ly + Math.random() * lh,
+            r:     1,
+            max:   rand(6, 18) * devicePixelRatio,
+            alpha: (0.45 + 0.18 * eased) * Math.max(0.10, textFade)
+          });
+        }
+
+        oCtx.clearRect(0, 0, W, H);
+        for (let i = textRipples.length - 1; i >= 0; i--) {
+          const rp = textRipples[i];
+          oCtx.strokeStyle = `rgba(150, 190, 255, ${rp.alpha})`;
+          oCtx.lineWidth   = 1 * devicePixelRatio;
+          oCtx.beginPath();
+          oCtx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.40, 0, 0, Math.PI * 2);
+          oCtx.stroke();
+          rp.r     += 0.45 * devicePixelRatio;
+          rp.alpha -= 0.013;
+          if (rp.alpha <= 0 || rp.r > rp.max) textRipples.splice(i, 1);
+        }
+
+        if (elapsed < DURATION) {
+          requestAnimationFrame(tick);
+        } else {
+          overlayCanvas.remove();
+          finalEffectCanvas = null;
+          lyricEl.style.opacity = '0';
+          lyricEl.style.filter  = '';
+        }
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function clearFinalEffect() {
+      finalEffectActive     = false;
+      finalEffectProgress   = 0;
+      lyricEl.style.filter  = '';
+      lyricEl.style.opacity = '';
+    }
+
+    // 逐字随机淡出，像雨水模糊文字，结束后执行回调
+    function fadeOutChars(callback) {
+      const chars = [...lyricEl.querySelectorAll('.line span')];
+      if (!chars.length) { callback(); return; }
+      let maxEnd = 0;
+      chars.forEach(ch => {
+        const delay = Math.random() * 900;
+        const dur   = 300 + Math.random() * 600;
+        ch.style.transition = `opacity ${dur}ms ease ${delay}ms`;
+        ch.style.opacity    = '0';
+        maxEnd = Math.max(maxEnd, delay + dur);
+      });
+      setTimeout(callback, maxEnd + 50);
+    }
+
+    // 回退上一步
+    function prev() {
+      if (switching) return;
+      if (pageIndex === -1) return;
+      if (revealCount > 1) {
+        // 隐藏最后一句（整列淡出）
+        lineEls[revealCount - 1].classList.remove('show');
+        revealCount--;
+      } else {
+        // 当前页只剩第一句 → 退回上一页（或清空）
+        switching = true;
+        clearFinalEffect();
+        lineEls.forEach(el => el.classList.remove('show'));
+        setTimeout(() => {
+          if (pageIndex === 0) {
+            lyricEl.innerHTML = '';
+            lineEls = [];
+            revealCount = 0;
+            pageIndex = -1;
+          } else {
+            pageIndex--;
+            buildPage(pageIndex);
+            void lyricEl.offsetHeight;
+            lineEls.forEach(el => el.classList.add('show'));
+            revealCount = lineEls.length;
+          }
+          switching = false;
+        }, 1100);
+      }
+    }
+
+    function next(fromKey = false) {
+      if (doSkipTitle(fromKey)) return;
+      if (switching || pages.length === 0) return;
+      hintEl.style.opacity = '0';   // 第一次交互后隐藏提示
+
+      // 本页还有没显示完的句子 → 显示下一句
+      if (pageIndex !== -1 && revealCount < lineEls.length) {
+        revealNextLine();
+        return;
+      }
+
+      // 本页已经显示完 → 翻到下一页
+      switching = true;
+      if (pageIndex === -1) {
+        // 首次进入，直接建第一页
+        pageIndex = 0;
+        buildPage(pageIndex);
+        revealCount = 0;
+        void lyricEl.offsetHeight; // 强制重排，让 CSS transition 能从 opacity:0 起步
+        revealNextLine();
+        switching = false;
+      } else {
+        // 逐字随机淡出后换页
+        fadeOutChars(() => {
+          clearFinalEffect();
+          pageIndex = (pageIndex + 1) % pages.length;
+          buildPage(pageIndex);
+          revealCount = 0;
+          void lyricEl.offsetHeight; // 同上
+          revealNextLine();
+          switching = false;
+        });
+      }
+    }
+
+    // 鼠标左键
+    document.addEventListener('mousedown', (e) => {
+      if (e.button === 0) next();
+    });
+    // 方向键
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); next(true); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); prev(); }
+    });
+
+    /* ====================== 雨的动画 ====================== */
+    const canvas = document.getElementById('rain');
+    const ctx = canvas.getContext('2d');
+    let W, H, drops = [], ripples = [], boostDrops = [], glowOrbs = [];
+    let rainBoost = 0;
+    let orbBoost  = 0;
+    let warmBoost = 0;
+    let finalEffectProgress = 0;
+    let warmOrbs = [];
+
+    const stage = document.getElementById('stage');
+
+    function resize() {
+      W = canvas.width  = stage.clientWidth  * devicePixelRatio;
+      H = canvas.height = stage.clientHeight * devicePixelRatio;
+      canvas.style.width  = stage.clientWidth + 'px';
+      canvas.style.height = stage.clientHeight + 'px';
+      initDrops();
+    }
+    window.addEventListener('resize', resize);
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    function initDrops() {
+      const count = Math.floor((W * H) / (24000 * devicePixelRatio)); // 雨丝密度（数值越小越密）
+      drops = [];
+      for (let i = 0; i < count; i++) {
+        drops.push(makeDrop(true));
+      }
+    }
+
+    function makeDrop(spread) {
+      const depth = rand(0.5, 1);          // 远近层次
+      return {
+        x: rand(0, W),
+        y: spread ? rand(0, H) : rand(-H * 0.2, 0),
+        len: rand(14, 30) * depth * devicePixelRatio,
+        speed: rand(2.2, 4.2) * depth * devicePixelRatio,
+        drift: rand(0.3, 0.9) * depth * devicePixelRatio, // 轻微斜风
+        alpha: rand(0.45, 0.85) * depth     // 更明显
+      };
+    }
+
+    function initGlowOrbs() {
+      glowOrbs.length = 0;
+      // 深蓝大光斑：慢、宽、沉
+      for (let i = 0; i < 5; i++) {
+        glowOrbs.push({
+          kind:         'deep',
+          cx:           rand(0.08, 0.92),
+          cy:           rand(0.10, 0.85),
+          r:            rand(0.40, 0.68),
+          driftX:       rand(0.04, 0.08),
+          driftY:       rand(0.03, 0.06),
+          phaseX:       rand(0, 6.28),
+          phaseY:       rand(0, 6.28),
+          speedX:       rand(0.10, 0.24),
+          speedY:       rand(0.08, 0.20),
+          alpha:        rand(0.52, 0.74),
+          bSpeed:       rand(0.18, 0.38),
+          bPhase:       rand(0, 6.28),
+        });
+      }
+      // 浅蓝小光斑：活、快、亮
+      for (let i = 0; i < 6; i++) {
+        glowOrbs.push({
+          kind:         'light',
+          cx:           rand(0.08, 0.92),
+          cy:           rand(0.10, 0.85),
+          r:            rand(0.14, 0.32),
+          driftX:       rand(0.05, 0.10),
+          driftY:       rand(0.04, 0.08),
+          phaseX:       rand(0, 6.28),
+          phaseY:       rand(0, 6.28),
+          speedX:       rand(0.24, 0.50),
+          speedY:       rand(0.18, 0.40),
+          alpha:        rand(0.48, 0.68),
+          bSpeed:       rand(0.32, 0.65),
+          bPhase:       rand(0, 6.28),
+        });
+      }
+    }
+
+    function initWarmOrbs() {
+      warmOrbs.length = 0;
+      // 深暖色：红橙调，慢、宽
+      for (let i = 0; i < 4; i++) {
+        warmOrbs.push({
+          kind:   'deep',
+          cx:     rand(0.08, 0.92), cy:     rand(0.10, 0.85),
+          r:      rand(0.22, 0.40),
+          driftX: rand(0.03, 0.07), driftY: rand(0.02, 0.05),
+          phaseX: rand(0, 6.28),    phaseY: rand(0, 6.28),
+          speedX: rand(0.10, 0.26), speedY: rand(0.08, 0.20),
+          alpha:  rand(0.38, 0.58),
+          bSpeed: rand(0.18, 0.40), bPhase: rand(0, 6.28),
+        });
+      }
+      // 浅暖色：金黄调，活、小
+      for (let i = 0; i < 4; i++) {
+        warmOrbs.push({
+          kind:   'light',
+          cx:     rand(0.08, 0.92), cy:     rand(0.10, 0.85),
+          r:      rand(0.08, 0.18),
+          driftX: rand(0.04, 0.09), driftY: rand(0.03, 0.07),
+          phaseX: rand(0, 6.28),    phaseY: rand(0, 6.28),
+          speedX: rand(0.22, 0.48), speedY: rand(0.18, 0.38),
+          alpha:  rand(0.32, 0.52),
+          bSpeed: rand(0.28, 0.58), bPhase: rand(0, 6.28),
+        });
+      }
+    }
+
+    function drawWarmOrbs(ts) {
+      if (warmBoost < 0.005) return;
+      const t = ts / 1000;
+      ctx.save();
+      for (const orb of warmOrbs) {
+        const x = (orb.cx + orb.driftX * Math.sin(t * orb.speedX + orb.phaseX)) * W;
+        const y = (orb.cy + orb.driftY * Math.cos(t * orb.speedY + orb.phaseY)) * H;
+        const r = orb.r * Math.min(W, H);
+        const breathe = 0.30 + 0.70 * (0.5 + 0.5 * Math.sin(t * orb.bSpeed + orb.bPhase));
+        const a = orb.alpha * breathe * warmBoost;
+        if (a < 0.004) continue;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        if (orb.kind === 'deep') {
+          g.addColorStop(0,    `rgba(200, 78, 12, ${a})`);
+          g.addColorStop(0.42, `rgba(140, 44, 6,  ${a * 0.50})`);
+          g.addColorStop(1,    'rgba(0, 0, 0, 0)');
+        } else {
+          g.addColorStop(0,    `rgba(255, 172, 48, ${a})`);
+          g.addColorStop(0.42, `rgba(220, 128, 22, ${a * 0.48})`);
+          g.addColorStop(1,    'rgba(0, 0, 0, 0)');
+        }
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      ctx.restore();
+    }
+
+    function drawGlowOrbs(ts) {
+      if (orbBoost < 0.005) return;
+      const t = ts / 1000;
+
+      // 最后一页：聚拢到文字中心并随 finalEffectProgress 消散
+      let convCX = 0.5, convCY = 0.5, converge = 0, orbFade = 1;
+      if (pageIndex === pages.length - 1 && finalEffectProgress > 0) {
+        const rect  = lyricEl.getBoundingClientRect();
+        const sRect = stage.getBoundingClientRect();
+        convCX   = (rect.left + rect.width  * 0.5 - sRect.left) / sRect.width;
+        convCY   = (rect.top  + rect.height * 0.5 - sRect.top)  / sRect.height;
+        converge = Math.min(1, finalEffectProgress * 1.4);
+        orbFade  = Math.max(0, 1 - finalEffectProgress * 1.15);
+      }
+
+      ctx.save();
+      for (const orb of glowOrbs) {
+        let cx = orb.cx + orb.driftX * Math.sin(t * orb.speedX + orb.phaseX);
+        let cy = orb.cy + orb.driftY * Math.cos(t * orb.speedY + orb.phaseY);
+        cx = cx + (convCX - cx) * converge;
+        cy = cy + (convCY - cy) * converge;
+        const x = cx * W;
+        const y = cy * H;
+        const r = orb.r * Math.min(W, H) * (1 - converge * 0.35);
+        const breathe = 0.30 + 0.70 * (0.5 + 0.5 * Math.sin(t * orb.bSpeed + orb.bPhase));
+        const a = orb.alpha * breathe * orbBoost * orbFade;
+        if (a < 0.004) continue;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        if (orb.kind === 'deep') {
+          g.addColorStop(0,    `rgba(18, 50, 210, ${a})`);
+          g.addColorStop(0.42, `rgba(8,  22, 140, ${a * 0.50})`);
+          g.addColorStop(1,    'rgba(0, 0, 0, 0)');
+        } else {
+          g.addColorStop(0,    `rgba(110, 175, 255, ${a})`);
+          g.addColorStop(0.42, `rgba(55,  115, 230, ${a * 0.48})`);
+          g.addColorStop(1,    'rgba(0, 0, 0, 0)');
+        }
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      ctx.restore();
+    }
+
+    // 全程底部蓝色环境光，集中于涟漪区，若隐若现
+    // 所有圆心在画布外（cy>1），裁切到底部38%，避免污染上方黑色背景
+    function drawAmbientBlue(ts) {
+      const t = ts / 1000;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, H * 0.62, W, H * 0.38);
+      ctx.clip();
+      const specs = [
+        { cx: 0.20, cy: 1.04, r: 0.44, a: 0.10, bp: 0.0, bs: 0.22 },
+        { cx: 0.72, cy: 1.02, r: 0.40, a: 0.09, bp: 2.1, bs: 0.19 },
+        { cx: 0.50, cy: 1.10, r: 0.56, a: 0.08, bp: 4.3, bs: 0.27 },
+        { cx: 0.10, cy: 1.03, r: 0.30, a: 0.07, bp: 1.5, bs: 0.15 },
+        { cx: 0.88, cy: 1.03, r: 0.32, a: 0.07, bp: 3.7, bs: 0.21 },
+      ];
+      for (const s of specs) {
+        const breathe = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * s.bs + s.bp));
+        const a = s.a * breathe;
+        const x = s.cx * W;
+        const y = s.cy * H;
+        const r = s.r * W;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0,    `rgba(38, 88, 220, ${a})`);
+        g.addColorStop(0.50, `rgba(18, 48, 165, ${a * 0.45})`);
+        g.addColorStop(1,    'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, H * 0.62, W, H * 0.38);
+      }
+      ctx.restore();
+    }
+
+    function addRipple(x, y) {
+      const intense = rainBoost > 0.5;
+      // intense(16-21页)：1.5s消散；gentle(其余页)：3s消散
+      ripples.push({
+        x, y, r: 1,
+        max:    (intense ? rand(24, 45) : rand(22, 42)) * devicePixelRatio,
+        alpha:  0.68,
+        decay:  intense ? 0.0076 : 0.0038,
+        expand: (intense ? 0.25  : 0.12)  * devicePixelRatio
+      });
+    }
+
+    function frame(ts) {
+      ctx.clearRect(0, 0, W, H);
+
+      drawAmbientBlue(ts);
+      drawGlowOrbs(ts);
+      drawWarmOrbs(ts);
+
+      // 雨势：第16–21页（index 15–20）升档
+      // 蓝色光斑：第1–22页（index 0–21）全程可见
+      // 暖色光斑：第16–21页（index 15–20）叠加
+      const boostTarget    = (pageIndex >= 15 && pageIndex <= 20) ? 1 : 0;
+      const orbBoostTarget = (pageIndex >= 0  && pageIndex <= 21) ? 1 : 0;
+      const warmBoostTarget= (pageIndex >= 15 && pageIndex <= 20) ? 1 : 0;
+      rainBoost += (boostTarget     - rainBoost) * 0.006;
+      orbBoost  += (orbBoostTarget  - orbBoost)  * 0.006;
+      warmBoost += (warmBoostTarget - warmBoost) * 0.006;
+
+      // 动态维护额外雨丝池
+      const extraCount = Math.round(drops.length * rainBoost * 0.9);
+      while (boostDrops.length < extraCount) boostDrops.push(makeDrop(true));
+      if (boostDrops.length > extraCount + 4) boostDrops.length = extraCount;
+
+      ctx.lineCap = 'round';
+
+      function drawDrop(d) {
+        ctx.strokeStyle = `rgba(205, 222, 255, ${d.alpha})`;
+        ctx.lineWidth = 1.6 * devicePixelRatio;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - d.drift, d.y - d.len);
+        ctx.stroke();
+        d.x += d.drift;
+        d.y += d.speed;
+        if (d.y - d.len > H) {
+          if (Math.random() < 0.6) addRipple(d.x, H - rand(2, 30) * devicePixelRatio);
+          Object.assign(d, makeDrop(false));
+        }
+      }
+
+      for (const d of drops) drawDrop(d);
+      for (const d of boostDrops) drawDrop(d);
+
+      // 涟漪基础密度（提高基础概率补偿雨速减慢）+ 增强时额外叠加
+      const ambient = Math.max(1, Math.round(W / (180 * devicePixelRatio)));
+      for (let i = 0; i < ambient; i++) {
+        if (Math.random() < 0.05 + 0.11 * rainBoost) {
+          addRipple(rand(0, W), rand(H * 0.66, H - 3 * devicePixelRatio));
+        }
+      }
+
+      // 地面涟漪
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const rp = ripples[i];
+        ctx.strokeStyle = `rgba(150, 180, 255, ${rp.alpha})`;
+        ctx.lineWidth = 1 * devicePixelRatio;
+        ctx.beginPath();
+        ctx.ellipse(rp.x, rp.y, rp.r, rp.r * 0.32, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        rp.r += rp.expand;
+        rp.alpha -= rp.decay;
+        if (rp.alpha <= 0 || rp.r > rp.max) ripples.splice(i, 1);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    resize();
+    initGlowOrbs();
+    initWarmOrbs();
+    requestAnimationFrame(frame);
+
+
+    </script>
+    </body>
+    </html>
